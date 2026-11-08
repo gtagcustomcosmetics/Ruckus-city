@@ -391,7 +391,7 @@ const clerks=[];
   for(let i=0;i<4;i++){const c=new THREE.Mesh(new THREE.CylinderGeometry(3.2-i*.45,3.6-i*.45,5,12),M(i%2?0xe8554a:0xffffff));c.position.set(100,2.5+i*5,-100);c.castShadow=true;world.add(c);}
   const lamp=new THREE.Mesh(new THREE.SphereGeometry(1.6,10,8),BM(0xfff1b0));lamp.position.set(100,22.5,-100);world.add(lamp);
   // controls sign near spawn
-  const lines=['ARM POWER!','Push off the ground & walls with your hands','to run, climb and leap. Hop the steps to the roof!','','TRIGGER: grab cash bags in stores / buy upgrades','A or X: get in / out of a car   B or Y: back to spawn','CAR: hold both hands like a wheel and tilt to steer','RIGHT trigger = gas   LEFT trigger = brake / reverse','Robbing stores = HEAT. Cops chase you. Roofs are safe!'];
+  const lines=['ARM POWER!','Push off the ground & walls with your hands','to run, climb and leap. Hop the steps to the roof!','','TRIGGER: grab cash bags in stores / buy upgrades','A or X: get in / out of a car   B or Y: back to spawn','CLICK a thumbstick: switch arm / joystick movement (right stick up = jump)','CAR: hold both hands like a wheel and tilt to steer','RIGHT trigger = gas   LEFT trigger = brake / reverse','Robbing stores = HEAT. Cops chase you. Roofs are safe!'];
   const tex=canvasTex(1024,512,(g,w,h)=>{
     g.fillStyle='#241a33';g.fillRect(0,0,w,h);g.strokeStyle='#ffd23f';g.lineWidth=10;g.strokeRect(10,10,w-20,h-20);
     g.textAlign='center';lines.forEach((t,i)=>{g.font=i===0?'900 64px system-ui':'700 31px system-ui';g.fillStyle=i===0?'#ffd23f':'#fff';g.fillText(t,w/2,i===0?88:130+i*40);});
@@ -494,21 +494,54 @@ function headCollide(){
 function readInput(){
   for(const h of hands){
     const gp=h.input&&h.input.gamepad;
-    h.trigP=h.trig; h.aP=h.a; h.bP=h.b;
+    h.trigP=h.trig; h.aP=h.a; h.bP=h.b; h.spP=h.sp;
     h.trig=gp&&gp.buttons[0]?gp.buttons[0].value:0;
     h.sq=gp&&gp.buttons[1]?gp.buttons[1].value:0;
     h.a=!!(gp&&gp.buttons[4]&&gp.buttons[4].pressed);
     h.b=!!(gp&&gp.buttons[5]&&gp.buttons[5].pressed);
+    h.sp=!!(gp&&gp.buttons[3]&&gp.buttons[3].pressed);
+    h.ax=(gp&&gp.axes[2])||0; h.ay=(gp&&gp.axes[3])||0;
   }
+}
+let stickMode=false;
+function bodyBlocked(x,z,y){
+  for(const b of solids){
+    if(b.max.y<y+.45||b.min.y>y+1.3) continue;
+    if(x>b.min.x-.28&&x<b.max.x+.28&&z>b.min.z-.28&&z<b.max.z+.28) return true;
+  }
+  return false;
+}
+function stickMove(dt){
+  const L=handBy('left')||hands[0],Rt=handBy('right')||hands[1];
+  camera.getWorldPosition(tmpV2); const hx=tmpV2.x,hz=tmpV2.z;
+  tmpE.setFromQuaternion(camera.quaternion,'YXZ'); const yaw=tmpE.y;
+  const dz=v=>Math.abs(v)<.15?0:v, fx=dz(L.ax), fy=dz(L.ay), spd=4.5;
+  const dx=(fx*Math.cos(yaw)+fy*Math.sin(yaw))*spd*dt, dzz=(-fx*Math.sin(yaw)+fy*Math.cos(yaw))*spd*dt;
+  if(!bodyBlocked(hx+dx,hz,rig.position.y)) rig.position.x+=dx;
+  if(!bodyBlocked(rig.position.x+(hx-rig.position.x),hz+dzz,rig.position.y)) rig.position.z+=dzz;
+  camera.getWorldPosition(tmpV2);
+  const gh=groundH(tmpV2.x,tmpV2.z,rig.position.y);
+  const grounded=rig.position.y<=gh+.03;
+  if(grounded&&Rt.ay<-.7) vel.y=5.5+1.2*state.lv.jump;
+  vel.y-=GRAV*dt; rig.position.y+=vel.y*dt;
+  if(rig.position.y<gh){rig.position.y=gh;if(vel.y<0)vel.y=0;}
+  vel.x=vel.z=0; wasTouch=false; touchVel.set(0,0,0); for(const h of hands)h.has=false;
+  rig.position.x=clamp(rig.position.x,-BOUND,BOUND); rig.position.z=clamp(rig.position.z,-BOUND,BOUND);
+  headCollide();
+  if(rig.position.y<-5){rig.position.copy(SPAWN);vel.set(0,0,0);}
 }
 function footMove(dt){
   rig.rotation.set(0,0,0);
+  if(stickMode){stickMove(dt);return;}
   const sum=tmpV.set(0,0,0); let n=0;
   for(const h of hands){
     if(!h.grip.visible){h.has=false;h.touch=false;continue;}
     const lp=h.grip.position;
     tmpV2.set(rig.position.x+lp.x,rig.position.y+lp.y,rig.position.z+lp.z);
-    const t=handTouch(tmpV2);
+    let t=handTouch(tmpV2);
+    const moved=h.has?h.prev.distanceTo(lp):1;
+    h.still=(t&&moved<.003)?(h.still||0)+dt:0;
+    if(t&&h.still>.5&&rig.position.y>groundH(rig.position.x,rig.position.z,rig.position.y)+.05) t=false;
     if(h.has&&t){sum.x-=lp.x-h.prev.x;sum.y-=lp.y-h.prev.y;sum.z-=lp.z-h.prev.z;n++;}
     h.touch=t; h.prev.copy(lp); h.has=true;
   }
@@ -749,7 +782,7 @@ renderer.xr.addEventListener('sessionstart',()=>{
   inXR=true; const a=audio(); if(a&&a.resume)a.resume();
   document.getElementById('intro').style.display='none';
   scene.add(rig); rig.rotation.set(0,0,0); rig.position.copy(SPAWN); car=null; vel.set(0,0,0);
-  hud.visible=true; drawHUD(); toast('Push off the ground with your hands!','#ffd23f');
+  hud.visible=true; drawHUD(); toast('Click a thumbstick for joystick mode','#ffd23f');
 });
 renderer.xr.addEventListener('sessionend',()=>{
   inXR=false; if(car)exitCar(); document.getElementById('intro').style.display='flex'; hud.visible=false;
@@ -760,6 +793,7 @@ function loop(t){
   const dt=Math.min(Math.max((t-last)/1000,0),.05)||.016; last=t; tAcc+=dt;
   if(renderer.xr.isPresenting){
     readInput();
+    for(const h of hands){ if(h.sp&&!h.spP){ stickMode=!stickMode; vel.set(0,0,0); wasTouch=false; toast(stickMode?'JOYSTICK MODE  (click stick again for arms)':'ARM MODE','#7dffa0'); } }
     if(car) driveCar(dt); else footMove(dt);
     updateArms(); interactions(dt);
   } else {
