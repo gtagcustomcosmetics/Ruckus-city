@@ -11,6 +11,7 @@
   #intro>*{pointer-events:auto}
   h1{margin:0;font-size:clamp(34px,8vw,70px);letter-spacing:2px;color:#ffd23f;text-shadow:0 4px 0 #b3481f}
   p{margin:0;max-width:640px;line-height:1.45;opacity:.94;font-size:15px}
+  #room{padding:10px 14px;border-radius:10px;border:2px solid #ffd23f;background:#2a2346;color:#fff;font-size:16px;text-align:center;width:min(280px,80vw)}
   #btnslot button{position:static!important;margin:0 auto!important;display:block!important;transform:none!important;font-size:16px!important}
 </style>
 </head>
@@ -18,6 +19,7 @@
 <div id="intro">
   <h1>RUCKUS CITY</h1>
   <p>Arm-power VR crime sandbox. Rob the stores, dodge the cops, drive the cars, buy upgrades. Open this page in the Quest Browser (it has to be served over HTTPS) and hit the button.</p>
+  <input id="room" maxlength="24" placeholder="Room code for friends (optional)" autocomplete="off">
   <div id="btnslot"></div>
 </div>
 
@@ -99,13 +101,13 @@ function beep(f=440,d=.12,type='square',v=.07,slide=0,delay=0){
   o.connect(g); g.connect(a.destination); o.start(t0); o.stop(t0+d+.02);
 }
 const sfx={
-  coin(){beep(880,.08,'square',.06);beep(1320,.14,'square',.06,0,.07);},
-  buy(){[523,659,784,1046].forEach((f,i)=>beep(f,.12,'triangle',.08,0,i*.07));},
-  no(){beep(180,.2,'sawtooth',.06,-80);},
-  shoot(){beep(700,.14,'sawtooth',.05,-520);},
-  bonk(){beep(260,.18,'square',.08,-170);},
-  bust(){[400,330,260,180].forEach((f,i)=>beep(f,.18,'sawtooth',.07,0,i*.12));},
-  thud(){beep(110,.12,'square',.07,-60);},
+  coin(){beep(880,.08,'sine',.035);beep(1320,.14,'sine',.035,0,.07);},
+  buy(){[523,659,784,1046].forEach((f,i)=>beep(f,.12,'triangle',.045,0,i*.07));},
+  no(){beep(180,.2,'triangle',.035,-80);},
+  shoot(){beep(700,.14,'triangle',.03,-520);},
+  bonk(){beep(260,.18,'triangle',.045,-170);},
+  bust(){[400,330,260,180].forEach((f,i)=>beep(f,.18,'triangle',.04,0,i*.12));},
+  thud(){beep(110,.12,'triangle',.04,-60);},
 };
 
 /* ================= save / state ================= */
@@ -330,7 +332,7 @@ function makeStore(cfg){
   for(const s of [-1,1]) box(cx+s*4.45,.95,mid+f*.4,.7,1.9,4.6,0x9b7b5a,{mat:shelfM});
   for(const s of [-1,1]){const l=new THREE.Mesh(new THREE.BoxGeometry(1.2,.1,.4),BM(0xfff1b0));l.position.set(cx+s*2.5,4.45,mid);world.add(l);}
   // clerk
-  const clerk=makeBlob({body:[0xe0553a,0x4b9be8,0xf2c94c][(rnd()*3)|0],skin:[0xe9a6c1,0xb9a6e9,0xa6d9e9][(rnd()*3)|0],hat:['chef','cap','none'][(rnd()*3)|0],armsUp:true});
+  const clerk=makeBlob({body:[0xe0553a,0x4b9be8,0xf2c94c][(rnd()*3)|0],skin:[0xe9a6c1,0xb9a6e9,0xa6d9e9][(rnd()*3)|0],hat:['chef','cap','none'][(rnd()*3)|0],armsUp:!cfg.shop});
   clerk.position.set(cx,0,back+f*.75); clerk.rotation.y=f===1?0:Math.PI; world.add(clerk);
   clerk.userData.base=clerk.position.y; clerks.push(clerk);
   if(!cfg.shop){
@@ -391,7 +393,7 @@ const clerks=[];
   for(let i=0;i<4;i++){const c=new THREE.Mesh(new THREE.CylinderGeometry(3.2-i*.45,3.6-i*.45,5,12),M(i%2?0xe8554a:0xffffff));c.position.set(100,2.5+i*5,-100);c.castShadow=true;world.add(c);}
   const lamp=new THREE.Mesh(new THREE.SphereGeometry(1.6,10,8),BM(0xfff1b0));lamp.position.set(100,22.5,-100);world.add(lamp);
   // controls sign near spawn
-  const lines=['ARM POWER!','Push off the ground & walls with your hands','to run, climb and leap. Hop the steps to the roof!','','TRIGGER: grab cash bags in stores / buy upgrades','A or X: get in / out of a car   B or Y: back to spawn','CLICK a thumbstick: switch arm / joystick movement (right stick up = jump)','CAR: hold both hands like a wheel and tilt to steer','RIGHT trigger = gas   LEFT trigger = brake / reverse','Robbing stores = HEAT. Cops chase you. Roofs are safe!'];
+  const lines=['ARM POWER!','Push off the ground & walls with your hands','to run, climb and leap. Hop the steps to the roof!','','TRIGGER: grab cash bags in stores / buy upgrades','A or X: get in / out of a car   B or Y: back to spawn','CAR: hold both hands like a wheel and tilt to steer','RIGHT trigger = gas   LEFT trigger = brake / reverse','Robbing stores = HEAT. Cops chase you. Roofs are safe!'];
   const tex=canvasTex(1024,512,(g,w,h)=>{
     g.fillStyle='#241a33';g.fillRect(0,0,w,h);g.strokeStyle='#ffd23f';g.lineWidth=10;g.strokeRect(10,10,w-20,h-20);
     g.textAlign='center';lines.forEach((t,i)=>{g.font=i===0?'900 64px system-ui':'700 31px system-ui';g.fillStyle=i===0?'#ffd23f':'#fff';g.fillText(t,w/2,i===0?88:130+i*40);});
@@ -494,55 +496,27 @@ function headCollide(){
 function readInput(){
   for(const h of hands){
     const gp=h.input&&h.input.gamepad;
-    h.trigP=h.trig; h.aP=h.a; h.bP=h.b; h.spP=h.sp;
+    h.trigP=h.trig; h.aP=h.a; h.bP=h.b;
     h.trig=gp&&gp.buttons[0]?gp.buttons[0].value:0;
     h.sq=gp&&gp.buttons[1]?gp.buttons[1].value:0;
     h.a=!!(gp&&gp.buttons[4]&&gp.buttons[4].pressed);
     h.b=!!(gp&&gp.buttons[5]&&gp.buttons[5].pressed);
-    h.sp=!!(gp&&gp.buttons[3]&&gp.buttons[3].pressed);
-    h.ax=(gp&&gp.axes[2])||0; h.ay=(gp&&gp.axes[3])||0;
+    h.stick=[(gp&&gp.axes[2])||0,(gp&&gp.axes[3])||0];
+    h.stickBtn=!!(gp&&gp.buttons[3]&&gp.buttons[3].pressed);
+    h.extra=!!(gp&&gp.buttons.length>6&&Array.from(gp.buttons).slice(6).some(x=>x.pressed));
   }
-}
-let stickMode=false;
-function bodyBlocked(x,z,y){
-  for(const b of solids){
-    if(b.max.y<y+.45||b.min.y>y+1.3) continue;
-    if(x>b.min.x-.28&&x<b.max.x+.28&&z>b.min.z-.28&&z<b.max.z+.28) return true;
-  }
-  return false;
-}
-function stickMove(dt){
-  const L=handBy('left')||hands[0],Rt=handBy('right')||hands[1];
-  camera.getWorldPosition(tmpV2); const hx=tmpV2.x,hz=tmpV2.z;
-  tmpE.setFromQuaternion(camera.quaternion,'YXZ'); const yaw=tmpE.y;
-  const dz=v=>Math.abs(v)<.15?0:v, fx=dz(L.ax), fy=dz(L.ay), spd=4.5;
-  const dx=(fx*Math.cos(yaw)+fy*Math.sin(yaw))*spd*dt, dzz=(-fx*Math.sin(yaw)+fy*Math.cos(yaw))*spd*dt;
-  if(!bodyBlocked(hx+dx,hz,rig.position.y)) rig.position.x+=dx;
-  if(!bodyBlocked(rig.position.x+(hx-rig.position.x),hz+dzz,rig.position.y)) rig.position.z+=dzz;
-  camera.getWorldPosition(tmpV2);
-  const gh=groundH(tmpV2.x,tmpV2.z,rig.position.y);
-  const grounded=rig.position.y<=gh+.03;
-  if(grounded&&Rt.ay<-.7) vel.y=5.5+1.2*state.lv.jump;
-  vel.y-=GRAV*dt; rig.position.y+=vel.y*dt;
-  if(rig.position.y<gh){rig.position.y=gh;if(vel.y<0)vel.y=0;}
-  vel.x=vel.z=0; wasTouch=false; touchVel.set(0,0,0); for(const h of hands)h.has=false;
-  rig.position.x=clamp(rig.position.x,-BOUND,BOUND); rig.position.z=clamp(rig.position.z,-BOUND,BOUND);
-  headCollide();
-  if(rig.position.y<-5){rig.position.copy(SPAWN);vel.set(0,0,0);}
 }
 function footMove(dt){
-  rig.rotation.set(0,0,0);
-  if(stickMode){stickMove(dt);return;}
-  const sum=tmpV.set(0,0,0); let n=0;
+  if(joyMode){joyMove(dt);return;}
+  const ry=rig.rotation.y, sum=tmpV.set(0,0,0); let n=0;
   for(const h of hands){
-    if(!h.grip.visible){h.has=false;h.touch=false;continue;}
+    if(!h.grip.visible){h.has=false;h.touch=false;h.still=0;continue;}
     const lp=h.grip.position;
-    tmpV2.set(rig.position.x+lp.x,rig.position.y+lp.y,rig.position.z+lp.z);
-    let t=handTouch(tmpV2);
-    const moved=h.has?h.prev.distanceTo(lp):1;
-    h.still=(t&&moved<.003)?(h.still||0)+dt:0;
-    if(t&&h.still>.5&&rig.position.y>groundH(rig.position.x,rig.position.z,rig.position.y)+.05) t=false;
-    if(h.has&&t){sum.x-=lp.x-h.prev.x;sum.y-=lp.y-h.prev.y;sum.z-=lp.z-h.prev.z;n++;}
+    tmpV2.copy(lp).applyAxisAngle(UP,ry).add(rig.position);
+    // a hand that sits still for half a second stops counting as holding on
+    if(h.has) h.still=(lp.distanceTo(h.prev)/Math.max(dt,.001)<.1)?(h.still||0)+dt:0; else h.still=0;
+    const t=handTouch(tmpV2)&&h.still<.5;
+    if(h.has&&t){tmpV3.subVectors(lp,h.prev).applyAxisAngle(UP,ry);sum.sub(tmpV3);n++;}
     h.touch=t; h.prev.copy(lp); h.has=true;
   }
   if(n>0){
@@ -588,7 +562,7 @@ function enterCar(c){
   car=c; c.group.add(rig); rig.rotation.set(0,0,0);
   rig.position.set(-.45-camera.position.x,1.4-camera.position.y,.75-camera.position.z);
   vel.set(0,0,0); wasTouch=false; for(const h of hands)h.has=false;
-  const a=audio(); if(a){const o=a.createOscillator(),g=a.createGain();o.type='sawtooth';g.gain.value=.02;o.connect(g);g.connect(a.destination);o.start();c.eng={o,g};}
+  const a=audio(); if(a){const o=a.createOscillator(),g=a.createGain();o.type='sine';o.frequency.value=42;g.gain.value=.008;o.connect(g);g.connect(a.destination);o.start();c.eng={o,g};}
   toast('RIGHT trigger: gas   LEFT: brake','#fff');
 }
 function exitCar(){
@@ -621,7 +595,7 @@ function driveCar(dt){
     steer=clamp(-a/.6,-1,1); if(Math.abs(steer)<.07)steer=0;
   }
   const gpL=L.input&&L.input.gamepad,gpR=Rt.input&&Rt.input.gamepad;
-  steer=clamp(steer+((gpL&&gpL.axes[2])||0)+((gpR&&gpR.axes[2])||0),-1,1);
+  steer=clamp(steer+((gpL&&gpL.axes[2])||0),-1,1);
   const gas=Rt.trig,brake=L.trig,maxSpd=16+4*state.lv.tires;
   if(gas>.05&&c.speed>-.5) c.speed+=gas*(10+2*state.lv.tires)*dt;
   if(brake>.05){c.speed-=brake*(c.speed>.4?26:7)*dt;}
@@ -635,7 +609,7 @@ function driveCar(dt){
   for(const w of c.wheels) w.rotation.x-=c.speed*dt/.38;
   for(const f of c.fronts) f.rotation.y=-steer*.45;
   c.sw.rotation.z=-steer*1.3;
-  if(c.eng){c.eng.o.frequency.value=48+Math.abs(c.speed)*7;c.eng.g.gain.value=.015+gas*.03;}
+  if(c.eng){c.eng.o.frequency.value=42+Math.abs(c.speed)*2.5;c.eng.g.gain.value=.008+gas*.012;}
   for(const cp of cops){ // run 'em over
     if(cp.stun>0||cp.leaving) continue;
     if(Math.abs(c.speed)>5&&Math.hypot(cp.g.position.x-c.group.position.x,cp.g.position.z-c.group.position.z)<2.3) stunCop(cp,4,6);
@@ -693,7 +667,7 @@ function updateCops(dt){
     g.position.y=c.y+Math.abs(Math.sin(c.t*9))*.08;
     const sw=Math.sin(c.t*9)*.7; g.userData.arms[0].rotation.x=sw; g.userData.arms[1].rotation.x=-sw;
     c.sirT+=dt; if(c.sirT>.25){c.sirT=0;const s=g.userData.siren;s.material.color.setHex(s.material.color.getHex()===0xff3b3b?0x3b6bff:0xff3b3b);}
-    if(!car&&bustCD<=0&&rig.position.y<1.5&&dist<1.0) busted();
+    if(!car&&bustCD<=0&&rig.position.y<1.5&&dist<1.0){busted();return;}
   }
 }
 function fire(h){
@@ -718,7 +692,7 @@ function updateBullets(dt){
 function collect(b){
   b.active=false; b.timer=30; b.g.visible=false;
   const v=Math.round(b.value*(1+.5*state.lv.bags)); state.cash+=v; state.heat=Math.min(10,state.heat+1); heatT=0; save();
-  b.g.getWorldPosition(tmpV2); tmpV2.y+=.5; pop('+$'+v,tmpV2,'#7dffa0'); sfx.coin();
+  b.g.getWorldPosition(tmpV2); tmpV2.y+=.5; pop('+$'+v,tmpV2,'#7dffa0'); sfx.coin(); mpBag(bags.indexOf(b));
   if(state.heat===1) toast('WANTED! Cops incoming','#ff6b6b');
 }
 function buy(k){
@@ -729,7 +703,7 @@ function buy(k){
 }
 function interactions(dt){
   scene.updateMatrixWorld();
-  fireCD-=dt;
+  fireCD-=dt; if(menuOpen) return;
   for(const h of hands){
     if(!h.grip.visible)continue;
     h.grip.getWorldPosition(h.world);
@@ -749,7 +723,7 @@ function interactions(dt){
       if(car) exitCar();
       else{
         headWorld(tmpV2); let best=null,bd=4;
-        for(const c of cars){const d=Math.hypot(c.group.position.x-tmpV2.x,c.group.position.z-tmpV2.z);if(d<bd){bd=d;best=c;}}
+        for(const c of cars){if(performance.now()-(c.remoteT||-1e9)<1500)continue;const d=Math.hypot(c.group.position.x-tmpV2.x,c.group.position.z-tmpV2.z);if(d<bd){bd=d;best=c;}}
         if(best) enterCar(best);
       }
     }
@@ -772,8 +746,229 @@ function drawHUD(){
   g.fillStyle='#d6d0f0'; g.font='700 26px system-ui';
   g.fillText(`GLOVES ${state.lv.jump}  TIRES ${state.lv.tires}  BAGS ${state.lv.bags}${state.lv.gun?'  BLASTER':''}`,28,206);
   g.fillStyle='#9d96c0'; g.font='600 22px system-ui';
-  g.fillText(car?'A/X: get out':'A/X: car   B/Y: respawn',28,238);
+  g.fillText((joyMode?'STICK  ':'')+(car?'A/X: get out':'A/X: car   B/Y: respawn'),28,238);
   hudTex.needsUpdate=true;
+}
+
+/* ================= stick mode + snap turn ================= */
+let joyMode=false,snapArmed=true,joyP=false,menuP=false,menuOpen=false,menuHover=-1,armMul=2;
+try{const v=parseFloat(localStorage.getItem('ruckusArmMul'));if(v>=1&&v<=4)armMul=v;}catch(e){}
+const qTmp=new THREE.Quaternion(), tmpV3=new THREE.Vector3();
+function snapTurn(a){
+  const old=tmpV.copy(camera.position).applyAxisAngle(UP,rig.rotation.y);
+  rig.rotation.y+=a;
+  const nw=tmpV2.copy(camera.position).applyAxisAngle(UP,rig.rotation.y);
+  rig.position.add(old).sub(nw);
+}
+
+/* ================= in-VR menu: arm length ================= */
+const ARM_OPTS=[1,1.5,2,3,4];
+const MENU_BTNS=ARM_OPTS.map((v,i)=>({x:21+i*96,y:120,w:86,h:80,val:v}));
+const MENU_CLOSE={x:156,y:235,w:200,h:60};
+const menuC=document.createElement('canvas'); menuC.width=512; menuC.height=320;
+const menuTex=new THREE.CanvasTexture(menuC); menuTex.colorSpace=THREE.SRGBColorSpace;
+const menuMesh=new THREE.Mesh(new THREE.PlaneGeometry(.8,.5),new THREE.MeshBasicMaterial({map:menuTex,transparent:true,depthTest:false,fog:false}));
+menuMesh.renderOrder=1000; menuMesh.visible=false; scene.add(menuMesh);
+const mRay=new THREE.Raycaster();
+function drawMenu(){
+  const g=menuC.getContext('2d'); g.clearRect(0,0,512,320); g.textAlign='center';
+  g.fillStyle='rgba(24,18,44,.95)'; rr(g,0,0,512,320,28); g.fill();
+  g.strokeStyle='#ffd23f'; g.lineWidth=5; rr(g,3,3,506,314,26); g.stroke();
+  g.fillStyle='#ffd23f'; g.font='900 38px system-ui'; g.fillText('ARM LENGTH',256,56);
+  g.fillStyle='#d6d0f0'; g.font='600 21px system-ui'; g.fillText('Point + trigger. Higher = reach farther',256,92);
+  MENU_BTNS.forEach((b,i)=>{
+    const sel=armMul===b.val;
+    g.fillStyle=sel?'#ffd23f':(menuHover===i?'#5b4f94':'#3a3260'); rr(g,b.x,b.y,b.w,b.h,16); g.fill();
+    g.fillStyle=sel?'#241a40':'#fff'; g.font='900 34px system-ui'; g.fillText(b.val+'\u00d7',b.x+b.w/2,b.y+b.h/2+12);
+  });
+  const c=MENU_CLOSE; g.fillStyle=menuHover===100?'#e0573f':'#a63f2f'; rr(g,c.x,c.y,c.w,c.h,16); g.fill();
+  g.fillStyle='#fff'; g.font='900 28px system-ui'; g.fillText('CLOSE',c.x+c.w/2,c.y+c.h/2+10);
+  menuTex.needsUpdate=true;
+}
+function openMenu(){
+  menuOpen=true; camera.getWorldPosition(tmpV2); camera.getWorldQuaternion(qTmp); tmpE.setFromQuaternion(qTmp,'YXZ');
+  menuMesh.position.set(tmpV2.x-Math.sin(tmpE.y),tmpV2.y-.05,tmpV2.z-Math.cos(tmpE.y));
+  menuMesh.rotation.set(0,tmpE.y,0); menuMesh.visible=true; menuHover=-1; drawMenu();
+}
+function closeMenu(){menuOpen=false; menuMesh.visible=false;}
+function menuUpdate(){
+  if(!menuOpen) return;
+  scene.updateMatrixWorld();
+  let hover=-1,changed=false;
+  for(const h of hands){
+    if(!h.grip.visible) continue;
+    h.ray.getWorldPosition(tmpV); tmpV3.set(0,0,-1).transformDirection(h.ray.matrixWorld);
+    mRay.set(tmpV,tmpV3);
+    const hit=mRay.intersectObject(menuMesh)[0]; if(!hit||!hit.uv) continue;
+    const cx=hit.uv.x*512, cy=(1-hit.uv.y)*320;
+    let idx=MENU_BTNS.findIndex(b=>cx>=b.x&&cx<=b.x+b.w&&cy>=b.y&&cy<=b.y+b.h);
+    if(idx<0&&cx>=MENU_CLOSE.x&&cx<=MENU_CLOSE.x+MENU_CLOSE.w&&cy>=MENU_CLOSE.y&&cy<=MENU_CLOSE.y+MENU_CLOSE.h) idx=100;
+    if(idx<0) continue;
+    hover=idx;
+    if(h.trig>.7&&h.trigP<=.7){
+      if(idx===100){closeMenu();return;}
+      armMul=MENU_BTNS[idx].val; changed=true; sfx.buy();
+      try{localStorage.setItem('ruckusArmMul',String(armMul));}catch(e){}
+      toast('Arm length '+armMul+'\u00d7','#7dffa0');
+    }
+  }
+  if(hover!==menuHover||changed){menuHover=hover;drawMenu();}
+}
+function inputExtras(){
+  const rh=handBy('right'), lh=handBy('left');
+  const joyNow=!!(rh&&rh.stickBtn);   // click RIGHT stick = stick mode on/off
+  if(joyNow&&!joyP){
+    joyMode=!joyMode; vel.set(0,0,0); wasTouch=false; for(const h of hands)h.has=false;
+    toast(joyMode?'STICK MODE: left stick walks, right stick turns':'ARM MODE','#fff');
+  }
+  joyP=joyNow;
+  const menuNow=!!(lh&&(lh.extra||lh.stickBtn));   // menu (3 lines) button, or click LEFT stick
+  if(menuNow&&!menuP){menuOpen?closeMenu():openMenu();}
+  menuP=menuNow;
+  const x=rh?rh.stick[0]:0;
+  if(car||joyMode){
+    if(snapArmed&&Math.abs(x)>.6){snapArmed=false;snapTurn(x>0?-Math.PI/4:Math.PI/4);}
+    else if(Math.abs(x)<.3) snapArmed=true;
+  }
+}
+function joyMove(dt){
+  for(const h of hands){h.has=false;h.touch=false;h.still=0;}
+  const L=handBy('left'); let sx=L?L.stick[0]:0, sy=L?L.stick[1]:0;
+  if(Math.hypot(sx,sy)<.15){sx=0;sy=0;}
+  camera.getWorldQuaternion(qTmp); tmpE.setFromQuaternion(qTmp,'YXZ'); const yw=tmpE.y;
+  const mx=(Math.cos(yw)*sx+Math.sin(yw)*sy)*4.5*dt, mz=(-Math.sin(yw)*sx+Math.cos(yw)*sy)*4.5*dt;
+  camera.getWorldPosition(tmpV2); const hx=tmpV2.x,hz=tmpV2.z;
+  if(!blockedXZ(hx+mx,hz,.35)) rig.position.x+=mx;
+  if(!blockedXZ(hx,hz+mz,.35)) rig.position.z+=mz;
+  vel.x=0; vel.z=0; wasTouch=false; vel.y-=GRAV*dt; rig.position.y+=vel.y*dt;
+  const gh=groundH(rig.position.x,rig.position.z,rig.position.y);
+  if(rig.position.y<gh){rig.position.y=gh;vel.y=0;}
+  rig.position.x=clamp(rig.position.x,-BOUND,BOUND); rig.position.z=clamp(rig.position.z,-BOUND,BOUND);
+  headCollide();
+  if(rig.position.y<-5){rig.position.copy(SPAWN);vel.set(0,0,0);}
+}
+
+/* ================= multiplayer (PeerJS public cloud) ================= */
+const mp={on:false,host:false,peer:null,conn:null,conns:new Map(),remote:new Map(),myId:null,sendT:0,gen:0};
+const r2=v=>Math.round(v*100)/100;
+const mpA=new THREE.Vector3(),mpB=new THREE.Vector3(),mpC=new THREE.Vector3();
+function loadPeerLib(){return new Promise((res,rej)=>{if(window.Peer)return res();const sc=document.createElement('script');sc.src='https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js';sc.onload=res;sc.onerror=rej;document.head.appendChild(sc);});}
+function myState(){
+  camera.getWorldPosition(tmpV2); const h=[r2(tmpV2.x),r2(tmpV2.y),r2(tmpV2.z)];
+  camera.getWorldQuaternion(qTmp); tmpE.setFromQuaternion(qTmp,'YXZ');
+  const hp=side=>{const hd=handBy(side);if(!hd||!hd.grip.visible)return null;hd.grip.getWorldPosition(tmpV);return [r2(tmpV.x),r2(tmpV.y),r2(tmpV.z)];};
+  const st={h,y:r2(tmpE.y),l:hp('left'),r:hp('right')};
+  if(car) st.c=[cars.indexOf(car),r2(car.group.position.x),r2(car.group.position.z),r2(car.group.rotation.y)];
+  return st;
+}
+function makeAvatar(id){
+  let hs=0; for(const ch of id) hs=(hs*31+ch.charCodeAt(0))|0;
+  const m=new THREE.MeshStandardMaterial({color:new THREE.Color().setHSL((Math.abs(hs)%360)/360,.7,.6),roughness:.8});
+  const g=new THREE.Group();
+  const body=new THREE.Mesh(new THREE.SphereGeometry(1,16,12),m); body.scale.set(.21,.34,.17);
+  const head=new THREE.Mesh(new THREE.SphereGeometry(.13,14,10),m);
+  for(const sd of [-1,1]){const e=new THREE.Mesh(new THREE.SphereGeometry(.03,8,6),new THREE.MeshBasicMaterial({color:0x1a1a2a}));e.position.set(sd*.05,.02,-.115);head.add(e);}
+  const arms=[0,1].map(()=>[new THREE.Mesh(armGeo,m),new THREE.Mesh(armGeo,m)]);
+  const hnd=[0,1].map(()=>new THREE.Mesh(new THREE.SphereGeometry(.06,10,8),m));
+  g.add(body,head,...arms.flat(),...hnd); scene.add(g);
+  return {g,body,head,arms,hnd};
+}
+function updateAvatar(av,st){
+  const yaw=st.y||0;
+  av.head.position.set(st.h[0],st.h[1],st.h[2]); av.head.rotation.y=yaw;
+  av.body.position.set(st.h[0],st.h[1]-.5,st.h[2]); av.body.rotation.y=yaw;
+  [st.l,st.r].forEach((hp,i)=>{
+    const vis=!!hp; av.hnd[i].visible=av.arms[i][0].visible=av.arms[i][1].visible=vis; if(!vis)return;
+    const sd=i?1:-1;
+    mpA.set(sd*.2,-.28,0).applyAxisAngle(UP,yaw).add(av.head.position); mpC.set(hp[0],hp[1],hp[2]);
+    mpB.addVectors(mpA,mpC).multiplyScalar(.5); mpB.y-=.1; mpB.x+=sd*.08;
+    setSeg(av.arms[i][0],mpA,mpB); setSeg(av.arms[i][1],mpB,mpC); av.hnd[i].position.copy(mpC);
+  });
+}
+function dropRemote(id){
+  const r=mp.remote.get(id);
+  if(r&&r.av){scene.remove(r.av.g); r.av.g.traverse(o=>{if(o.isMesh&&o.geometry!==armGeo)o.geometry.dispose();});}
+  mp.remote.delete(id);
+}
+function mpUpdate(){
+  const now=performance.now();
+  for(const [id,r] of mp.remote){
+    if(now-r.last>4000){dropRemote(id);continue;}
+    if(!r.av) r.av=makeAvatar(id);
+    updateAvatar(r.av,r.s);
+    if(r.s.c){const c=cars[r.s.c[0]]; if(c&&c!==car){c.group.position.x=r.s.c[1];c.group.position.z=r.s.c[2];c.group.rotation.y=r.s.c[3];c.remoteT=now;}}
+  }
+}
+function mpTick(dt){
+  if(!mp.on||!renderer.xr.isPresenting) return;
+  mpUpdate();
+  mp.sendT-=dt; if(mp.sendT>0) return; mp.sendT=1/15;
+  const st=myState();
+  try{
+    if(mp.host){
+      const pk={[mp.myId]:st}; for(const [id,r] of mp.remote)pk[id]=r.s;
+      for(const c of mp.conns.values()) if(c.open) c.send({t:'snap',p:pk});
+    } else if(mp.conn&&mp.conn.open) mp.conn.send({t:'st',s:st});
+  }catch(e){}
+}
+function mpBag(i){
+  if(!mp.on||i<0) return; const m={t:'bag',i};
+  try{ if(mp.host){for(const c of mp.conns.values())if(c.open)c.send(m);} else if(mp.conn&&mp.conn.open)mp.conn.send(m); }catch(e){}
+}
+function mpData(d,from){
+  if(!d) return;
+  const okSt=x=>x&&Array.isArray(x.h)&&x.h.length===3;
+  if(d.t==='st'&&mp.host&&from&&okSt(d.s)){const r=mp.remote.get(from.peer)||{};r.s=d.s;r.last=performance.now();mp.remote.set(from.peer,r);}
+  else if(d.t==='snap'&&!mp.host&&d.p){for(const id in d.p){if(id===mp.myId||!okSt(d.p[id]))continue;const r=mp.remote.get(id)||{};r.s=d.p[id];r.last=performance.now();mp.remote.set(id,r);}}
+  else if(d.t==='bag'){
+    const b=bags[d.i]; if(b&&b.active){b.active=false;b.timer=30;b.g.visible=false;}
+    if(mp.host)for(const c of mp.conns.values())if(c!==from&&c.open)c.send(d);
+  }
+}
+function mpStop(){
+  mp.gen++; mp.on=false; mp.host=false;
+  try{mp.peer&&mp.peer.destroy();}catch(e){}
+  mp.peer=null; mp.conn=null; mp.conns.clear();
+  for(const id of [...mp.remote.keys()])dropRemote(id);
+}
+function mpHost(hid,room,gen,n){
+  if(n>2){toast('Could not join room','#ff6b6b');return;}
+  const p=new Peer(hid); let ready=false; mp.peer=p;
+  p.on('open',id=>{if(gen!==mp.gen){p.destroy();return;} ready=true;mp.myId=id;mp.host=true;mp.on=true;toast('Room '+room+': you are hosting','#7dffa0');});
+  p.on('connection',c=>{
+    c.on('open',()=>{mp.conns.set(c.peer,c);toast('A friend joined','#7dffa0');});
+    c.on('data',d=>mpData(d,c));
+    c.on('close',()=>{mp.conns.delete(c.peer);dropRemote(c.peer);});
+  });
+  p.on('error',e=>{
+    if(gen!==mp.gen||ready) return;
+    p.destroy();
+    if(e.type==='unavailable-id') mpJoin(hid,room,gen,n+1); else toast('Multiplayer failed ('+e.type+')','#ff6b6b');
+  });
+}
+function mpJoin(hid,room,gen,n){
+  if(n>2){toast('Could not join room','#ff6b6b');return;}
+  const p=new Peer(); let ok=false; mp.peer=p;
+  p.on('open',id=>{
+    if(gen!==mp.gen){p.destroy();return;}
+    const c=p.connect(hid);
+    c.on('open',()=>{ok=true;mp.myId=id;mp.host=false;mp.conn=c;mp.on=true;toast('Joined room '+room,'#7dffa0');});
+    c.on('data',d=>mpData(d,null));
+    c.on('close',()=>{if(gen===mp.gen){toast('Host left - playing solo','#ffd23f');mpStop();}});
+  });
+  p.on('error',e=>{
+    if(gen!==mp.gen||ok) return;
+    p.destroy();
+    if(e.type==='peer-unavailable') mpHost(hid,room,gen,n+1); else toast('Multiplayer failed ('+e.type+')','#ff6b6b');
+  });
+}
+async function mpStart(code){
+  mpStop();
+  const room=String(code||'').trim().toLowerCase().replace(/[^a-z0-9]/g,'').slice(0,24); if(!room) return;
+  const gen=mp.gen;
+  try{await loadPeerLib();}catch(e){toast('Multiplayer unavailable (network)','#ff6b6b');return;}
+  if(gen!==mp.gen) return;
+  mpHost('ruckuscity-'+room,room,gen,0);
 }
 
 /* ================= loop ================= */
@@ -782,20 +977,33 @@ renderer.xr.addEventListener('sessionstart',()=>{
   inXR=true; const a=audio(); if(a&&a.resume)a.resume();
   document.getElementById('intro').style.display='none';
   scene.add(rig); rig.rotation.set(0,0,0); rig.position.copy(SPAWN); car=null; vel.set(0,0,0);
-  hud.visible=true; drawHUD(); toast('Click a thumbstick for joystick mode','#ffd23f');
+  hud.visible=true; drawHUD(); toast('Push off the ground with your hands!','#ffd23f');
+  mpStart(document.getElementById('room').value);
 });
 renderer.xr.addEventListener('sessionend',()=>{
-  inXR=false; if(car)exitCar(); document.getElementById('intro').style.display='flex'; hud.visible=false;
+  inXR=false; closeMenu(); mpStop(); if(car)exitCar(); rig.rotation.set(0,0,0); document.getElementById('intro').style.display='flex'; hud.visible=false;
   rig.position.set(0,0,0); gun.visible=false; gun.parent&&gun.parent.remove(gun);
 });
 
-function loop(t){
+/* Virtual arm reach: real arms hang ~0.8 m below the head, so hands never reach the floor.
+   Stretch hand positions away from the head so standing players can touch the ground. */
+function stretchHands(){
+  const hd=camera.position;
+  for(const h of hands){
+    if(!h.grip.visible) continue;
+    for(const o of [h.grip,h.ray]){
+      let dx=o.position.x-hd.x, dy=o.position.y-hd.y, dz=o.position.z-hd.z;
+      const rh=1+(armMul-1)*.3; dx*=rh; dz*=rh; if(dy<0) dy*=armMul;
+      o.position.set(hd.x+dx,hd.y+dy,hd.z+dz);
+    }
+  }
+}
+function tick(t){
   const dt=Math.min(Math.max((t-last)/1000,0),.05)||.016; last=t; tAcc+=dt;
   if(renderer.xr.isPresenting){
-    readInput();
-    for(const h of hands){ if(h.sp&&!h.spP){ stickMode=!stickMode; vel.set(0,0,0); wasTouch=false; toast(stickMode?'JOYSTICK MODE  (click stick again for arms)':'ARM MODE','#7dffa0'); } }
+    stretchHands(); readInput(); inputExtras();
     if(car) driveCar(dt); else footMove(dt);
-    updateArms(); interactions(dt);
+    updateArms(); interactions(dt); menuUpdate();
   } else {
     rig.position.set(0,0,0); const a=t/9000;
     camera.position.set(Math.cos(a)*40,18,Math.sin(a)*40); camera.lookAt(0,4,0);
@@ -808,7 +1016,7 @@ function loop(t){
   for(const c of clerks){c.userData.arms.forEach((a,i)=>{a.rotation.x=Math.sin(tAcc*14+i)*.08;});}
   for(const p of pads){p.item.rotation.y+=dt*1.5;p.item.position.y=1.35+Math.sin(tAcc*2+p.pos.x)*.04;}
   if(balloon){balloon.position.y=38+Math.sin(tAcc*.3)*2;balloon.rotation.y+=dt*.03;}
-  updateCops(dt); updateBullets(dt);
+  updateCops(dt); updateBullets(dt); mpTick(dt);
   for(let i=toasts.length-1;i>=0;i--){
     const o=toasts[i]; o.t+=dt; o.s.position.y+=dt*.05; o.s.material.opacity=1-clamp((o.t-1.5)/.6,0,1);
     if(o.t>2.1){camera.remove(o.s);o.s.material.map.dispose();o.s.material.dispose();toasts.splice(i,1);}
@@ -828,7 +1036,10 @@ function loop(t){
   // shadow light follows player
   const fx=Math.round((car?car.group.position.x:rig.position.x)/.5)*.5, fz=Math.round((car?car.group.position.z:rig.position.z)/.5)*.5;
   sunLight.target.position.set(fx,0,fz); sunLight.position.set(fx+sunDir.x*90,sunDir.y*90,fz+sunDir.z*90);
-  renderer.render(scene,camera);
+}
+function loop(t){
+  try{tick(t);}catch(e){console.error('tick error',e);}
+  try{renderer.render(scene,camera);}catch(e){console.error('render error',e);}
 }
 renderer.setAnimationLoop(loop);
 </script>
